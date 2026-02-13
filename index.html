@@ -1,0 +1,289 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breakfast Rotation</title>
+<style>
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 30px 0;
+}
+.app {
+    background: #fff;
+    width: 95%;
+    max-width: 650px;
+    padding: 25px;
+    border-radius: 20px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+    text-align: center;
+}
+h2 {
+    color: #333;
+    margin-bottom: 10px;
+}
+.current-card {
+    background: #4CAF50;
+    color: white;
+    padding: 18px;
+    border-radius: 15px;
+    margin: 20px 0;
+    font-size: 20px;
+    font-weight: bold;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+input {
+    padding: 8px 12px;
+    width: 60%;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 3px;
+    font-weight: 600;
+    font-size: 13px;
+    transition: 0.2s;
+}
+button:hover { opacity: 0.85; }
+.add-btn { background: #1976d2; color: white; }
+.done-btn { background: #2e7d32; color: white; }
+.absent-btn { background: #f57c00; color: white; }
+.reset-btn { background: #d32f2f; color: white; }
+.move-btn { background: #6a1b9a; color: white; }
+.delete-btn { background: #c2185b; color: white; }
+ul {
+    list-style: none;
+    padding: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+li {
+    padding: 10px;
+    margin: 6px 0;
+    border-radius: 10px;
+    background: #f5f5f5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+    transition: 0.2s;
+}
+li.highlight { background: #c8e6c9; font-weight: bold; }
+.name-number { margin-right: 10px; font-weight: 500; }
+.counter { font-size: 14px; color: #555; margin-bottom: 5px; }
+.history-table { width: 100%; margin-top: 25px; border-collapse: collapse; font-size: 14px; }
+.history-table th, .history-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+.history-table th { background-color: #1976d2; color: white; }
+.history-table tr:nth-child(even) { background-color: #f9f9f9; }
+.history-table tr:hover { background-color: #e3f2fd; }
+</style>
+</head>
+<body>
+
+<div class="app">
+    <h2>🍳 Breakfast Rotation</h2>
+    <div class="counter" id="counter"></div>
+    <div class="current-card" id="currentTurn"></div>
+
+    <input type="text" id="memberName" placeholder="Add new member">
+    <button class="add-btn">Add</button>
+
+    <ul id="memberList"></ul>
+
+    <div style="margin-top:10px;">
+        <button class="done-btn">✅ Done</button>
+        <button class="absent-btn">⏭ Absent</button>
+        <button class="reset-btn">🔄 Reset Default</button>
+    </div>
+
+    <h3 style="margin-top:25px;">✅ History</h3>
+    <table class="history-table" id="historyTable">
+        <thead>
+            <tr><th>Member</th><th>Date</th></tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+// ===== PASSWORD CONFIG =====
+const PASSWORD = "21011989";
+const SESSION_KEY = "breakfastSession";
+
+// ===== DEFAULT MEMBERS =====
+const defaultMembers = [
+"Mohammad Mubeen Bhai",
+"Muhammad Muzzamil",
+"Saransh",
+"Ahtisham Raza M...",
+"Anas Akhtar Mate...",
+"Malik Farhan Ah...",
+"Mohammad Mub...",
+"Muhammad Habi...",
+"Muhammad Kam...",
+"Syam Ahmad Sha...",
+"Syed Arman Moh...",
+"Tanmay Bimal Na...",
+"Umar Faraz Sarfra..."
+];
+
+// ===== LOAD DATA =====
+let savedData = JSON.parse(localStorage.getItem("breakfastData"));
+let data;
+if (!savedData || !savedData.members || savedData.members.length === 0) {
+    data = { members: [...defaultMembers], currentIndex: 0, history: [] };
+    localStorage.setItem("breakfastData", JSON.stringify(data));
+} else {
+    data = savedData;
+    if (!data.history) data.history = [];
+}
+
+// ===== PASSWORD FUNCTIONS =====
+function checkSession() {
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY));
+    return session && session.expires > Date.now();
+}
+
+function requirePassword() {
+    if (!checkSession()) {
+        const input = prompt("Enter password:");
+        if (input !== PASSWORD) {
+            alert("Wrong password! Access denied.");
+            return false;
+        }
+        const expires = Date.now() + 15*60*1000;
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ expires }));
+    }
+    return true;
+}
+
+function secureAction(func) {
+    return (...args) => {
+        if (!requirePassword()) return;
+        func(...args);
+    }
+}
+
+// ===== CORE FUNCTIONS =====
+function saveData() { localStorage.setItem("breakfastData", JSON.stringify(data)); }
+
+function addMember() {
+    const nameInput = document.getElementById("memberName");
+    const name = nameInput.value.trim();
+    if (!name) return alert("Enter a name");
+    if (data.members.length >= 12) return alert("Maximum 12 members allowed");
+    data.members.push(name);
+    nameInput.value = "";
+    saveData();
+    render();
+}
+
+function deleteMember(index) {
+    if (!confirm("Remove this member?")) return;
+    data.members.splice(index,1);
+    if(index < data.currentIndex) data.currentIndex--;
+    else if(index === data.currentIndex && data.currentIndex >= data.members.length) data.currentIndex = 0;
+    saveData(); render();
+}
+
+function moveMemberUp(index) {
+    if(index===0) return;
+    [data.members[index-1], data.members[index]]=[data.members[index], data.members[index-1]];
+    if(data.currentIndex===index) data.currentIndex--;
+    else if(data.currentIndex===index-1) data.currentIndex++;
+    saveData(); render();
+}
+
+function moveMemberDown(index) {
+    if(index===data.members.length-1) return;
+    [data.members[index+1], data.members[index]]=[data.members[index], data.members[index+1]];
+    if(data.currentIndex===index) data.currentIndex++;
+    else if(data.currentIndex===index+1) data.currentIndex--;
+    saveData(); render();
+}
+
+function markDone() {
+    if(data.members.length===0) return;
+    const todayMember = data.members[data.currentIndex];
+    const date = new Date().toLocaleString();
+    data.history.unshift({member: todayMember, date: date});
+    data.currentIndex = (data.currentIndex+1)%data.members.length;
+    saveData(); render();
+}
+
+function markAbsent() {
+    if(data.members.length===0) return;
+    data.currentIndex = (data.currentIndex+1)%data.members.length;
+    saveData(); render();
+}
+
+function resetData() {
+    if(!confirm("Reset members to default?")) return;
+    data.members = [...defaultMembers];
+    data.currentIndex = 0;
+    saveData(); render();
+}
+
+// ===== RENDER =====
+function render() {
+    const list = document.getElementById("memberList");
+    const currentDisplay = document.getElementById("currentTurn");
+    const counter = document.getElementById("counter");
+    const historyBody = document.querySelector("#historyTable tbody");
+
+    list.innerHTML = "";
+    counter.textContent = `Members: ${data.members.length}`;
+
+    if(data.members.length===0) currentDisplay.textContent="No members available";
+    else currentDisplay.textContent="Today Pays: "+data.members[data.currentIndex];
+
+    data.members.forEach((member,index)=>{
+        const li=document.createElement("li");
+        const nameSpan=document.createElement("span");
+        nameSpan.className="name-number";
+        nameSpan.textContent=(index+1)+". "+member;
+        if(index===data.currentIndex) li.classList.add("highlight");
+
+        const controls=document.createElement("div");
+        const upBtn=document.createElement("button"); upBtn.textContent="⬆"; upBtn.className="move-btn"; upBtn.onclick=secureAction(()=>moveMemberUp(index));
+        const downBtn=document.createElement("button"); downBtn.textContent="⬇"; downBtn.className="move-btn"; downBtn.onclick=secureAction(()=>moveMemberDown(index));
+        const delBtn=document.createElement("button"); delBtn.textContent="❌"; delBtn.className="delete-btn"; delBtn.onclick=secureAction(()=>deleteMember(index));
+
+        controls.appendChild(upBtn); controls.appendChild(downBtn); controls.appendChild(delBtn);
+        li.appendChild(nameSpan); li.appendChild(controls);
+        list.appendChild(li);
+    });
+
+    historyBody.innerHTML="";
+    data.history.forEach(entry=>{
+        const tr=document.createElement("tr");
+        const tdName=document.createElement("td"); tdName.textContent=entry.member;
+        const tdDate=document.createElement("td"); tdDate.textContent=entry.date;
+        tr.appendChild(tdName); tr.appendChild(tdDate);
+        historyBody.appendChild(tr);
+    });
+}
+
+// ===== ATTACH SECURE BUTTONS =====
+document.querySelector(".add-btn").onclick = secureAction(addMember);
+document.querySelector(".done-btn").onclick = secureAction(markDone);
+document.querySelector(".absent-btn").onclick = secureAction(markAbsent);
+document.querySelector(".reset-btn").onclick = secureAction(resetData);
+
+// ===== INITIAL RENDER =====
+render();
+</script>
+</body>
+</html>
